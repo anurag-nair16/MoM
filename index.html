@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+   <html lang="en">
+   <head>
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <title>Simple Expense Tracker</title>
+     <script src="https://cdn.tailwindcss.com"></script>
+     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+     <script src="https://unpkg.com/@babel/standalone@7.22.9/babel.min.js"></script>
+     <link rel="manifest" href="/manifest.json" />
+     <meta name="theme-color" content="#ffffff" />
+     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+   </head>
+   <body>
+     <div id="root"></div>
+     <script type="text/babel">
+       const { useState, useEffect } = React;
+
+       function App() {
+         const [name, setName] = useState('');
+         const [amount, setAmount] = useState('');
+         const [people, setPeople] = useState(() => {
+           const saved = localStorage.getItem('people');
+           return saved ? JSON.parse(saved) : [];
+         });
+         const [editAmounts, setEditAmounts] = useState({});
+
+         useEffect(() => {
+           localStorage.setItem('people', JSON.stringify(people));
+         }, [people]);
+
+         const handleSubmit = (e) => {
+           e.preventDefault();
+           if (name.trim() && amount && !isNaN(amount) && Number(amount) > 0) {
+             const existingPerson = people.find((person) => person.name.toLowerCase() === name.toLowerCase());
+             if (existingPerson) {
+               setPeople(
+                 people.map((person) =>
+                   person.name.toLowerCase() === name.toLowerCase()
+                     ? { ...person, amount: person.amount + Number(amount) }
+                     : person
+                 )
+               );
+             } else {
+               setPeople([...people, { name, amount: Number(amount) }]);
+             }
+             setName('');
+             setAmount('');
+           }
+         };
+
+         const updateAmount = (index, value, action) => {
+           if (!value || isNaN(value) || Number(value) <= 0) return;
+           setPeople(
+             people.map((person, i) =>
+               i === index
+                 ? {
+                     ...person,
+                     amount:
+                       action === 'add'
+                         ? person.amount + Number(value)
+                         : Math.max(0, person.amount - Number(value)),
+                   }
+                 : person
+             )
+           );
+           setEditAmounts({ ...editAmounts, [index]: '' });
+         };
+
+         const handleEditAmountChange = (index, value) => {
+           setEditAmounts({ ...editAmounts, [index]: value });
+         };
+
+         const totalAmount = people.reduce((sum, person) => sum + person.amount, 0);
+
+         const handleReset = () => {
+           setPeople([]);
+           setEditAmounts({});
+           localStorage.removeItem('people');
+         };
+
+         return (
+           <div className="p-4 max-w-md mx-auto">
+             <h1 className="text-2xl font-bold mb-4">Expense Tracker</h1>
+             <form onSubmit={handleSubmit} className="mb-4">
+               <div className="mb-2">
+                 <label className="block text-sm font-medium">Name</label>
+                 <input
+                   type="text"
+                   value={name}
+                   onChange={(e) => setName(e.target.value)}
+                   className="w-full p-2 border rounded"
+                   placeholder="Enter name"
+                   required
+                 />
+               </div>
+               <div className="mb-2">
+                 <label className="block text-sm font-medium">Amount</label>
+                 <input
+                   type="number"
+                   value={amount}
+                   onChange={(e) => setAmount(e.target.value)}
+                   className="w-full p-2 border rounded"
+                   placeholder="Enter amount"
+                   min="0"
+                   step="0.01"
+                   required
+                 />
+               </div>
+               <button type="submit" className="bg-blue-500 text-white p-2 rounded">
+                 Add
+               </button>
+             </form>
+             <div className="mb-4">
+               <h2 className="text-lg font-semibold">Totals</h2>
+               {people.length === 0 ? (
+                 <p>No entries yet.</p>
+               ) : (
+                 <ul className="list-disc pl-5">
+                   {people.map((person, index) => (
+                     <li key={index} className="flex items-center gap-2 mb-2">
+                       <span>{person.name}: ${person.amount.toFixed(2)}</span>
+                       <input
+                         type="number"
+                         value={editAmounts[index] || ''}
+                         onChange={(e) => handleEditAmountChange(index, e.target.value)}
+                         className="w-24 p-1 border rounded"
+                         placeholder="Amount"
+                         min="0"
+                         step="0.01"
+                       />
+                       <button
+                         onClick={() => updateAmount(index, editAmounts[index], 'add')}
+                         className="bg-green-500 text-white p-1 rounded text-sm"
+                       >
+                         Add
+                       </button>
+                       <button
+                         onClick={() => updateAmount(index, editAmounts[index], 'remove')}
+                         className="bg-red-500 text-white p-1 rounded text-sm"
+                       >
+                         Remove
+                       </button>
+                     </li>
+                   ))}
+                 </ul>
+               )}
+             </div>
+             <div className="mb-4">
+               <h2 className="text-lg font-semibold">Final Total</h2>
+               <p>${totalAmount.toFixed(2)}</p>
+             </div>
+             <button
+               onClick={handleReset}
+               className="bg-red-500 text-white p-2 rounded"
+             >
+               Reset All
+             </button>
+           </div>
+         );
+       }
+
+       ReactDOM.render(<App />, document.getElementById('root'));
+
+       if ('serviceWorker' in navigator) {
+         window.addEventListener('load', () => {
+           navigator.serviceWorker
+             .register('/sw.js')
+             .then((reg) => console.log('Service Worker registered'))
+             .catch((err) => console.log('Service Worker registration failed:', err));
+         });
+       }
+     </script>
+   </body>
+   </html>
