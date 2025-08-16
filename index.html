@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hare Krishna</title>
+  <title>Expense Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
@@ -18,11 +18,20 @@
     const { useState, useEffect } = React;
 
     function App() {
+      const STORAGE_VERSION = '1.0.0';
       const [name, setName] = useState('');
       const [amount, setAmount] = useState('');
       const [people, setPeople] = useState(() => {
         const saved = localStorage.getItem('people');
-        return saved ? JSON.parse(saved) : [];
+        const savedVersion = localStorage.getItem('storageVersion');
+        if (saved && savedVersion === STORAGE_VERSION) {
+          return JSON.parse(saved);
+        } else {
+          localStorage.removeItem('people');
+          localStorage.removeItem('includeInTotal');
+          localStorage.setItem('storageVersion', STORAGE_VERSION);
+          return [];
+        }
       });
       const [editAmounts, setEditAmounts] = useState({});
       const [successMessage, setSuccessMessage] = useState('');
@@ -31,16 +40,36 @@
       const [showAllHistory, setShowAllHistory] = useState(false);
       const [includeInTotal, setIncludeInTotal] = useState(() => {
         const saved = localStorage.getItem('includeInTotal');
-        return saved ? JSON.parse(saved) : {};
+        const savedVersion = localStorage.getItem('storageVersion');
+        if (saved && savedVersion === STORAGE_VERSION) {
+          return JSON.parse(saved);
+        } else {
+          return {};
+        }
       });
 
       useEffect(() => {
         localStorage.setItem('people', JSON.stringify(people));
+        localStorage.setItem('storageVersion', STORAGE_VERSION);
       }, [people]);
 
       useEffect(() => {
         localStorage.setItem('includeInTotal', JSON.stringify(includeInTotal));
+        localStorage.setItem('storageVersion', STORAGE_VERSION);
       }, [includeInTotal]);
+
+      useEffect(() => {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then((registration) => {
+            const checkUpdate = () => {
+              registration.update();
+            };
+            checkUpdate();
+            const interval = setInterval(checkUpdate, 1000 * 60 * 60);
+            return () => clearInterval(interval);
+          });
+        }
+      }, []);
 
       const showSuccess = (msg) => {
         setSuccessMessage(msg);
@@ -116,6 +145,13 @@
         showSuccess('All data reset');
       };
 
+      const handleClearCache = () => {
+        localStorage.clear();
+        setPeople([]);
+        setIncludeInTotal({});
+        showSuccess('App data cleared. Please refresh.');
+      };
+
       const handleRemovePerson = (index) => {
         const person = people[index];
         setPeople(prev => prev.filter((_, i) => i !== index));
@@ -157,7 +193,7 @@
 
       return (
         <div className="p-4 sm:p-6 max-w-lg mx-auto bg-gray-50 min-h-screen font-sans">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-center text-blue-700">Hare Krishna</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-center text-blue-700">Expense Tracker</h1>
           
           {successMessage && (
             <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50 w-11/12 sm:w-auto">
@@ -280,6 +316,12 @@
             className="w-full bg-red-600 text-white p-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-red-700"
           >
             Reset All
+          </button>
+          <button
+            onClick={handleClearCache}
+            className="w-full bg-yellow-600 text-white p-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-yellow-700 mt-2"
+          >
+            Clear App Cache
           </button>
 
           {showHistoryModal && selectedPerson && (
