@@ -1,176 +1,350 @@
 <!DOCTYPE html>
-   <html lang="en">
-   <head>
-     <meta charset="UTF-8" />
-     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-     <title>Simple Expense Tracker</title>
-     <script src="https://cdn.tailwindcss.com"></script>
-     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
-     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
-     <script src="https://unpkg.com/@babel/standalone@7.22.9/babel.min.js"></script>
-     <link rel="manifest" href="/manifest.json" />
-     <meta name="theme-color" content="#ffffff" />
-     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-   </head>
-   <body>
-     <div id="root"></div>
-     <script type="text/babel">
-       const { useState, useEffect } = React;
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expense Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.22.9/babel.min.js"></script>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
 
-       function App() {
-         const [name, setName] = useState('');
-         const [amount, setAmount] = useState('');
-         const [people, setPeople] = useState(() => {
-           const saved = localStorage.getItem('people');
-           return saved ? JSON.parse(saved) : [];
-         });
-         const [editAmounts, setEditAmounts] = useState({});
+    function App() {
+      const [name, setName] = useState('');
+      const [amount, setAmount] = useState('');
+      const [people, setPeople] = useState(() => {
+        const saved = localStorage.getItem('people');
+        return saved ? JSON.parse(saved) : [];
+      });
+      const [editAmounts, setEditAmounts] = useState({});
+      const [successMessage, setSuccessMessage] = useState('');
+      const [showHistoryModal, setShowHistoryModal] = useState(false);
+      const [selectedPerson, setSelectedPerson] = useState(null);
+      const [showAllHistory, setShowAllHistory] = useState(false);
+      const [includeInTotal, setIncludeInTotal] = useState(() => {
+        const saved = localStorage.getItem('includeInTotal');
+        return saved ? JSON.parse(saved) : {};
+      });
 
-         useEffect(() => {
-           localStorage.setItem('people', JSON.stringify(people));
-         }, [people]);
+      useEffect(() => {
+        localStorage.setItem('people', JSON.stringify(people));
+      }, [people]);
 
-         const handleSubmit = (e) => {
-           e.preventDefault();
-           if (name.trim() && amount && !isNaN(amount) && Number(amount) > 0) {
-             const existingPerson = people.find((person) => person.name.toLowerCase() === name.toLowerCase());
-             if (existingPerson) {
-               setPeople(
-                 people.map((person) =>
-                   person.name.toLowerCase() === name.toLowerCase()
-                     ? { ...person, amount: person.amount + Number(amount) }
-                     : person
-                 )
-               );
-             } else {
-               setPeople([...people, { name, amount: Number(amount) }]);
-             }
-             setName('');
-             setAmount('');
-           }
-         };
+      useEffect(() => {
+        localStorage.setItem('includeInTotal', JSON.stringify(includeInTotal));
+      }, [includeInTotal]);
 
-         const updateAmount = (index, value, action) => {
-           if (!value || isNaN(value) || Number(value) <= 0) return;
-           setPeople(
-             people.map((person, i) =>
-               i === index
-                 ? {
-                     ...person,
-                     amount:
-                       action === 'add'
-                         ? person.amount + Number(value)
-                         : Math.max(0, person.amount - Number(value)),
-                   }
-                 : person
-             )
-           );
-           setEditAmounts({ ...editAmounts, [index]: '' });
-         };
+      const showSuccess = (msg) => {
+        setSuccessMessage(msg);
+        setTimeout(() => setSuccessMessage(''), 3000);
+      };
 
-         const handleEditAmountChange = (index, value) => {
-           setEditAmounts({ ...editAmounts, [index]: value });
-         };
+      const addTransaction = (personName, transAmount, action) => {
+        const timestamp = new Date().toISOString();
+        setPeople(prevPeople => {
+          const lowerName = personName.toLowerCase();
+          const existingIndex = prevPeople.findIndex(p => p.name.toLowerCase() === lowerName);
+          if (existingIndex !== -1) {
+            const updatedPeople = [...prevPeople];
+            updatedPeople[existingIndex] = {
+              ...updatedPeople[existingIndex],
+              transactions: [
+                ...updatedPeople[existingIndex].transactions,
+                { amount: Number(transAmount), action, timestamp }
+              ]
+            };
+            return updatedPeople;
+          } else {
+            setIncludeInTotal(prev => ({ ...prev, [personName]: true }));
+            return [
+              ...prevPeople,
+              {
+                name: personName,
+                transactions: [{ amount: Number(transAmount), action, timestamp }]
+              }
+            ];
+          }
+        });
+      };
 
-         const totalAmount = people.reduce((sum, person) => sum + person.amount, 0);
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (name.trim() && amount && !isNaN(amount) && Number(amount) > 0) {
+          addTransaction(name, amount, 'add');
+          showSuccess(`Added $${amount} to ${name}`);
+          setName('');
+          setAmount('');
+        }
+      };
 
-         const handleReset = () => {
-           setPeople([]);
-           setEditAmounts({});
-           localStorage.removeItem('people');
-         };
+      const updateAmount = (index, value, action) => {
+        if (!value || isNaN(value) || Number(value) <= 0) return;
+        const person = people[index];
+        addTransaction(person.name, value, action);
+        showSuccess(`${action === 'add' ? 'Added' : 'Removed'} $${value} ${action === 'add' ? 'to' : 'from'} ${person.name}`);
+        setEditAmounts({ ...editAmounts, [index]: '' });
+      };
 
-         return (
-           <div className="p-4 max-w-md mx-auto">
-             <h1 className="text-2xl font-bold mb-4">Expense Tracker</h1>
-             <form onSubmit={handleSubmit} className="mb-4">
-               <div className="mb-2">
-                 <label className="block text-sm font-medium">Name</label>
-                 <input
-                   type="text"
-                   value={name}
-                   onChange={(e) => setName(e.target.value)}
-                   className="w-full p-2 border rounded"
-                   placeholder="Enter name"
-                   required
-                 />
-               </div>
-               <div className="mb-2">
-                 <label className="block text-sm font-medium">Amount</label>
-                 <input
-                   type="number"
-                   value={amount}
-                   onChange={(e) => setAmount(e.target.value)}
-                   className="w-full p-2 border rounded"
-                   placeholder="Enter amount"
-                   min="0"
-                   step="0.01"
-                   required
-                 />
-               </div>
-               <button type="submit" className="bg-blue-500 text-white p-2 rounded">
-                 Add
-               </button>
-             </form>
-             <div className="mb-4">
-               <h2 className="text-lg font-semibold">Totals</h2>
-               {people.length === 0 ? (
-                 <p>No entries yet.</p>
-               ) : (
-                 <ul className="list-disc pl-5">
-                   {people.map((person, index) => (
-                     <li key={index} className="flex items-center gap-2 mb-2">
-                       <span>{person.name}: ${person.amount.toFixed(2)}</span>
-                       <input
-                         type="number"
-                         value={editAmounts[index] || ''}
-                         onChange={(e) => handleEditAmountChange(index, e.target.value)}
-                         className="w-24 p-1 border rounded"
-                         placeholder="Amount"
-                         min="0"
-                         step="0.01"
-                       />
-                       <button
-                         onClick={() => updateAmount(index, editAmounts[index], 'add')}
-                         className="bg-green-500 text-white p-1 rounded text-sm"
-                       >
-                         Add
-                       </button>
-                       <button
-                         onClick={() => updateAmount(index, editAmounts[index], 'remove')}
-                         className="bg-red-500 text-white p-1 rounded text-sm"
-                       >
-                         Remove
-                       </button>
-                     </li>
-                   ))}
-                 </ul>
-               )}
-             </div>
-             <div className="mb-4">
-               <h2 className="text-lg font-semibold">Final Total</h2>
-               <p>${totalAmount.toFixed(2)}</p>
-             </div>
-             <button
-               onClick={handleReset}
-               className="bg-red-500 text-white p-2 rounded"
-             >
-               Reset All
-             </button>
-           </div>
-         );
-       }
+      const handleEditAmountChange = (index, value) => {
+        setEditAmounts({ ...editAmounts, [index]: value });
+      };
 
-       ReactDOM.render(<App />, document.getElementById('root'));
+      const computeTotal = (transactions) => {
+        return transactions.reduce((sum, trans) => 
+          sum + (trans.action === 'add' ? trans.amount : -trans.amount), 0
+        );
+      };
 
-       if ('serviceWorker' in navigator) {
-         window.addEventListener('load', () => {
-           navigator.serviceWorker
-             .register('/sw.js')
-             .then((reg) => console.log('Service Worker registered'))
-             .catch((err) => console.log('Service Worker registration failed:', err));
-         });
-       }
-     </script>
-   </body>
-   </html>
+      const totalAmount = people.reduce((sum, person) => 
+        includeInTotal[person.name] ? sum + computeTotal(person.transactions) : sum, 0
+      );
+
+      const handleReset = () => {
+        setPeople([]);
+        setEditAmounts({});
+        setIncludeInTotal({});
+        localStorage.removeItem('people');
+        localStorage.removeItem('includeInTotal');
+        showSuccess('All data reset');
+      };
+
+      const handleRemovePerson = (index) => {
+        const person = people[index];
+        setPeople(prev => prev.filter((_, i) => i !== index));
+        setIncludeInTotal(prev => {
+          const newState = { ...prev };
+          delete newState[person.name];
+          return newState;
+        });
+        showSuccess(`Removed ${person.name}`);
+      };
+
+      const toggleIncludeInTotal = (name) => {
+        setIncludeInTotal(prev => ({ ...prev, [name]: !prev[name] }));
+      };
+
+      const openHistory = (person) => {
+        setSelectedPerson(person);
+        setShowHistoryModal(true);
+      };
+
+      const closeModal = () => {
+        setShowHistoryModal(false);
+        setSelectedPerson(null);
+        setShowAllHistory(false);
+      };
+
+      const getAllTransactions = () => {
+        return people.flatMap(person => 
+          person.transactions.map(trans => ({
+            ...trans,
+            name: person.name
+          }))
+        ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      };
+
+      const formatDate = (isoString) => {
+        return new Date(isoString).toLocaleString();
+      };
+
+      return (
+        <div className="p-4 sm:p-6 max-w-lg mx-auto bg-gray-50 min-h-screen font-sans">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-center text-blue-700">Expense Tracker</h1>
+          
+          {successMessage && (
+            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50 w-11/12 sm:w-auto">
+              {successMessage}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mb-6 bg-white p-4 rounded-lg shadow">
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full p-3 border rounded-lg text-base sm:text-lg"
+                placeholder="Enter name"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Amount</label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full p-3 border rounded-lg text-base sm:text-lg"
+                placeholder="Enter amount"
+                min="0"
+                step="0.01"
+                required
+              />
+            </div>
+            <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-blue-700">
+              Add Expense
+            </button>
+          </form>
+
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold">Totals</h2>
+              <button 
+                onClick={() => setShowAllHistory(true)}
+                className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600"
+              >
+                View All History
+              </button>
+            </div>
+            {people.length === 0 ? (
+              <p className="text-center text-gray-500">No entries yet.</p>
+            ) : (
+              <ul className="space-y-4">
+                {people.map((person, index) => {
+                  const personTotal = computeTotal(person.transactions);
+                  return (
+                    <li key={index} className="bg-white p-4 rounded-lg shadow">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!includeInTotal[person.name]}
+                            onChange={() => toggleIncludeInTotal(person.name)}
+                            className="h-4 w-4"
+                          />
+                          <span className="font-medium text-base sm:text-lg">{person.name}: ${personTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex gap-2 mt-2 sm:mt-0">
+                          <button 
+                            onClick={() => openHistory(person)}
+                            className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                          >
+                            History
+                          </button>
+                          <button
+                            onClick={() => handleRemovePerson(index)}
+                            className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="number"
+                          value={editAmounts[index] || ''}
+                          onChange={(e) => handleEditAmountChange(index, e.target.value)}
+                          className="flex-1 p-2 border rounded-lg text-sm"
+                          placeholder="Amount"
+                          min="0"
+                          step="0.01"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => updateAmount(index, editAmounts[index], 'add')}
+                            className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 flex-1"
+                          >
+                            Add
+                          </button>
+                          <button
+                            onClick={() => updateAmount(index, editAmounts[index], 'remove')}
+                            className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 flex-1"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="mb-6 bg-white p-4 rounded-lg shadow">
+            <h2 className="text-lg sm:text-xl font-semibold mb-2">Final Total</h2>
+            <p className="text-xl sm:text-2xl font-bold text-blue-700">${totalAmount.toFixed(2)}</p>
+          </div>
+
+          <button
+            onClick={handleReset}
+            className="w-full bg-red-600 text-white p-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-red-700"
+          >
+            Reset All
+          </button>
+
+          {showHistoryModal && selectedPerson && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
+              <div className="bg-white p-6 rounded-lg max-w-md w-full max-h-96 overflow-y-auto">
+                <h3 className="text-lg sm:text-xl font-bold mb-4">History for {selectedPerson.name}</h3>
+                {selectedPerson.transactions.length === 0 ? (
+                  <p>No transactions yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {selectedPerson.transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map((trans, idx) => (
+                      <li key={idx} className="border-b pb-2">
+                        <span className="block text-sm text-gray-600">{formatDate(trans.timestamp)}</span>
+                        <span className={`font-medium ${trans.action === 'add' ? 'text-green-600' : 'text-red-600'}`}>
+                          {trans.action === 'add' ? '+' : '-'} ${trans.amount.toFixed(2)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button onClick={closeModal} className="mt-4 bg-blue-600 text-white p-2 rounded w-full hover:bg-blue-700">
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showAllHistory && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
+              <div className="bg-white p-6 rounded-lg max-w-md w-full max-h-96 overflow-y-auto">
+                <h3 className="text-lg sm:text-xl font-bold mb-4">All Transactions History</h3>
+                {getAllTransactions().length === 0 ? (
+                  <p>No transactions yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {getAllTransactions().map((trans, idx) => (
+                      <li key={idx} className="border-b pb-2">
+                        <span className="block text-sm text-gray-600">{formatDate(trans.timestamp)} - {trans.name}</span>
+                        <span className={`font-medium ${trans.action === 'add' ? 'text-green-600' : 'text-red-600'}`}>
+                          {trans.action === 'add' ? '+' : '-'} ${trans.amount.toFixed(2)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button onClick={closeModal} className="mt-4 bg-blue-600 text-white p-2 rounded w-full hover:bg-blue-700">
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then((reg) => console.log('Service Worker registered'))
+          .catch((err) => console.log('Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
